@@ -3,7 +3,10 @@ let app = new Seule('#app')
 
 app
     .find('button')
-    .click((e)=> e.text('Hello World'))
+    .click((e)=> {
+    	e.text("Welcome user X")
+    	app.find("img").css({width: "150px"})
+    })
 
 //You may remove-it !
 
