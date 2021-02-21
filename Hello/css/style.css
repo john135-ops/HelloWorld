@@ -18,11 +18,19 @@ button{
     border-radius: 5px;
     outline: none;
     transition: all 0.7s ease;
+    margin-top: 20px
 }
 
 button:hover{
     background: antiquewhite;
     color: #222222;
+}
+
+img{
+    width: 0;
+    display:block;
+    transition: all 0.7s ease;
+    margin: auto;
 }
 /*Demo Style*/
 
