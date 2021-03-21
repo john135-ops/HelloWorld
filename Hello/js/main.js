@@ -2,10 +2,10 @@
 let app = new Seule('#app')
 
 app
-    .find('button')
-    .click((e)=> {
-    	e.text("Welcome user X")
-    	app.find("img").css({width: "150px"})
+    .Find('button')
+    .Click((e)=> {
+    	e.Text("Welcome user X")
+    	app.Find("img").Css({width: "150px"})
     })
 
 //You may remove-it !
