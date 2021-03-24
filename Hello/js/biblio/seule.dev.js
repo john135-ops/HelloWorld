@@ -495,6 +495,25 @@ class Seule {
     return !!this.tags.className.match("(?:^|\\s)" + className + "(?!\\S)");
   }
 
+  Classes(action, className) {
+    if (action === "add") this.AddClass(className);
+    if (action === "remove") this.RemoveClass(className);
+    if (action === "toggle") this.ToggleClass(className);
+    return this;
+  }
+
+  ClassList() {
+    let result = [];
+
+    for (const element of this.tags.classList) result.push(element);
+
+    return result;
+  }
+
+  ClassListContains(className) {
+    return this.tags.classList.contains(className);
+  }
+
   Style(cssProperty, value) {
     return this.Each(function () {
       this.style[cssProperty] = value;
@@ -509,18 +528,6 @@ class Seule {
 
   GetStyle(cssProperty) {
     return getComputedStyle(this.tags)[cssProperty];
-  }
-
-  ClassList() {
-    let result = [];
-
-    for (const element of this.tags.classList) result.push(element);
-
-    return result;
-  }
-
-  ClassListContains(className) {
-    return this.tags.classList.contains(className);
   }
 
   Show() {
@@ -779,20 +786,18 @@ class Seule {
 
   Component(name, options) {
     let el = this.Find(name);
-
-    if (!options.data.length) {
-      options.obj = [];
-      options.obj.push(options.data);
-      options.data = options.obj;
-    }
-
-    Seule.PDO({
+    if (options.data)
+      if (!options.data.length) {
+        options.obj = [];
+        options.obj.push(options.data);
+        options.data = options.obj;
+      }
+    Seule.PDO(options.data || [{}], {
       element: el,
       component: true,
       mode: options.mode,
       style: options.style || "",
       execute: options.execute || false,
-      data: options.data || [{}],
       child: options.child || false,
       columns: options.columns || false,
       nest: options.nest || false,
@@ -817,36 +822,19 @@ class Seule {
   }
 
   Emit(attr, handler) {
-    let element = this.tags.querySelectorAll("*");
-    Seule.LOOP({
-      data: element,
-
-      handler(item) {
-        Seule.HANDLER(item, attr, handler);
-      }
-    });
+    let element;
+    if (this.root) element = this.children.el[1];
+    else element = this.tags;
+    Seule.SELECTALL(element, attr, handler);
     return this;
   }
 
-  HtmlMethod(elements) {
-    let el = elements || new Seule(this.children.el[1]),
-      allowd = [
-        "anime",
-        "text",
-        "val",
-        "css",
-        "addClass",
-        "removeClass",
-        "toggleClass",
-        "show",
-        "hide",
-        "visible",
-        "opacity",
-        "width",
-        "height"
-      ];
-
-    for (let ev of allowd) el.Emit(ev);
+  HtmlMethod() {
+    let element;
+    if (this.root) element = this.children.el[1];
+    else element = this.tags;
+    Seule.SELECTALL(element);
+    return this;
   }
 
   static async GET(options) {
@@ -1181,7 +1169,8 @@ class Seule {
   }
 
   static PRINT(options) {
-    let body = new Seule("body");
+    let title = options.title || "",
+      body = new Seule("body");
     body.Append(
       '<iframe class="seule--frame" name="sframe" style="position: fixed; bottom: -100%"></iframe>'
     );
@@ -1193,14 +1182,17 @@ class Seule {
       : iframeEl.contentDocument;
     frameDoc.document.open(); //Create a new HTML document.
 
-    frameDoc.document.write("<html><head><title>DIV Contents</title>");
+    frameDoc.document.write("<html><head><title>" + title + "</title>");
     frameDoc.document.write("</head><body>"); //Append the external CSS file.
 
-    frameDoc.document.write(
-      '<link href="' + options.css + '" rel="stylesheet" type="text/css" />'
-    ); //Append the DIV contents.
+    if (options.style)
+      frameDoc.document.write(
+        '<link href="' +
+          options.style +
+          '.css" rel="stylesheet" type="text/css" />'
+      ); //Append the DIV contents.
 
-    frameDoc.document.write(options.html);
+    frameDoc.document.write(options.template);
     frameDoc.document.write("</body></html>");
     frameDoc.document.close();
     setTimeout(function () {
@@ -1209,126 +1201,98 @@ class Seule {
     }, 500);
   }
 
-  static HANDLER(item, attr, handler) {
-    if (item.getAttribute("@" + attr)) {
-      let val = item.getAttribute("@" + attr),
-        option = "",
-        el = new Seule(item),
-        obj = val,
-        allowd =
-          "text val addClass removeClass toggleClass show hide visible opacity width height",
-        special = "css anime",
-        capitalStr = attr.replace(/^\w/, (c) => c.toUpperCase());
-
-      if (val.includes("{")) {
-        option = val.split("{");
-        obj = "{" + option[1].slice(0, -1) + "}";
-        obj = obj.replace(/[~']/g, '"').replace(/[~`]/g, '"');
-        if (allowd.includes(attr)) obj = option[1].slice(0, -1);
-        else obj = JSON.parse(obj);
-      }
-
-      if (option[0])
-        item.addEventListener(
-          option[0],
-          () => {
-            if (allowd.includes(attr) || special.includes(attr))
-              el[capitalStr](obj);
-            else handler(obj, el, item);
-          },
-          false
-        );
-      else {
-        if (allowd.includes(attr) || special.includes(attr))
-          el[capitalStr](obj);
-        else handler(obj, el, item);
-      }
+  static PDO(data, options) {
+    if (options) {
+      if (!options.query) options.query = (item) => item;
     }
-  }
 
-  static PDO(options) {
-    if (!options.query) options.query = (item) => item;
-
-    let obj = [...options.data],
+    let obj = [...data],
       child = [],
       nest = [],
       result = {},
       select = () => {
-        let filter = obj.filter((el, index) => {
-          if (options.execute !== "remove duplicates" && !options.columns)
-            el.index = index;
-          if (
-            (options.child && options.execute !== "insert") ||
-            (options.execute === "insert" && options.nest)
-          )
-            return el[options.child].some((e, i) => options.query(e, i));
-          return options.query(el, index);
-        });
+        if (options) {
+          let filter = obj.filter((el, index) => {
+            if (options.execute !== "remove duplicates" && !options.columns)
+              el.index = index;
+            if (
+              (options.child && options.execute !== "insert") ||
+              (options.execute === "insert" && options.nest)
+            )
+              return el[options.child].some((e, i) => options.query(e, i));
+            return options.query(el, index);
+          });
 
-        if (options.child) {
-          for (const el of obj) {
-            for (const e of el[options.child]) {
-              if (options.execute !== "remove duplicates") e.parent = el.index;
-              child.push(e);
+          if (options.child) {
+            for (const el of obj) {
+              for (const e of el[options.child]) {
+                if (options.execute !== "remove duplicates")
+                  e.parent = el.index;
+                child.push(e);
+              }
             }
+
+            nest = child;
+            child = child.filter((el, index) => options.query(el, index));
           }
 
-          nest = child;
-          child = child.filter((el, index) => options.query(el, index));
+          return filter;
+        }
+      };
+
+    (result.alter = (action, column, obj) => {
+      obj = obj || data;
+      obj.map(function (o) {
+        let c = o;
+
+        if (typeof column === "object" && action.toLowerCase() === "replace") {
+          c[column[1]] = c[column[0]];
+          delete c[column[0]];
         }
 
-        return filter;
-      },
-      map = (obj) => {
-        obj.map(function (o) {
-          let c = o;
-
-          if (
-            typeof options.columns === "object" &&
-            options.action.toLowerCase() === "replace"
-          ) {
-            c[options.columns[1]] = c[options.columns[0]];
-            delete c[options.columns[0]];
-          }
-
-          if (options.action.toLowerCase() === "drop")
-            for (const element of options.columns) delete c[element];
-          if (options.action.toLowerCase() === "add")
-            for (const element of options.columns)
-              if (!c.hasOwnProperty(element)) c[element] = "";
-          return c;
-        });
-      },
-      group = (obj) => {
-        let data = [];
-        options.group = [
-          ...new Set(obj.reduce((r, a) => r.concat(a[options.columns]), []))
-        ];
+        if (action.toLowerCase() === "drop")
+          for (const element of column) delete c[element];
+        if (action.toLowerCase() === "add")
+          for (const element of column)
+            if (!c.hasOwnProperty(element)) c[element] = "";
+        return c;
+      });
+      return result;
+    }),
+      (result.group = (column, obj) => {
+        obj = obj || data;
+        let da = [];
+        let group = [...new Set(obj.reduce((r, a) => r.concat(a[column]), []))];
         Seule.LOOP({
-          data: options.group,
+          data: group,
 
           handler(el, index) {
-            let e = '{"' + options.columns + '":"' + el + '"}';
-            data.push(JSON.parse(e));
+            let e = '{"' + column + '":"' + el + '"}';
+            da.push(JSON.parse(e));
           }
         });
-        return data;
-      },
-      removeDpl = (obj) => {
-        if (options.columns) {
+        result.res = da;
+        return result;
+      }),
+      (result.removeDpl = (column, obj) => {
+        obj = obj || data;
+
+        for (let ob of obj) delete ob.index;
+
+        if (column) {
           let lookup = new Set();
           return obj.filter(
-            (data) =>
-              !lookup.has(data[options.columns]) &&
-              lookup.add(data[options.columns])
+            (data) => !lookup.has(data[column]) && lookup.add(data[column])
           );
         }
 
         let uniqueSet = new Set(obj.map(JSON.stringify));
-        return Array.from(uniqueSet).map(JSON.parse);
-      },
-      sum = (obj) => {
-        return obj.reduce(
+        result.res = Array.from(uniqueSet).map(JSON.parse);
+        return result;
+      }),
+      (result.sum = (obj) => {
+        obj = obj || data;
+        result.res = obj.reduce(
           (sums, obj) =>
             Object.keys(obj).reduce((s, k) => {
               s[k] = (s[k] || 0) + +obj[k];
@@ -1336,232 +1300,284 @@ class Seule {
             }, sums),
           {}
         );
-      },
-      sort = (obj) => {
+        return result;
+      }),
+      (result.sort = (column, obj) => {
         let sortBy = () => (a, b) => {
-          if (a[options.columns] > b[options.columns]) return 1;
-          else if (a[options.columns] < b[options.columns]) return -1;
+          if (a[column] > b[column]) return 1;
+          else if (a[column] < b[column]) return -1;
           return 0;
         };
 
-        return obj.sort(sortBy(options.columns));
-      };
-
+        obj = obj || data;
+        result.res = obj.sort(sortBy(column));
+        return result;
+      });
     result.res = select();
     result.child = child;
 
-    switch (options.execute) {
-      case "update":
-        let items = Object.keys(options.item) || {};
-        result.res.forEach((f) =>
-          options.data.findIndex((e) => {
-            if (e === f)
-              for (const element of items) {
-                if (options.nest)
-                  for (const i of result.child)
-                    i[element] = options.item[element];
-                else e[element] = options.item[element];
-              }
-          })
-        );
-        break;
-
-      case "delete":
-        result.child.forEach((f) =>
-          nest.splice(
-            nest.findIndex((e) => e === f),
-            1
-          )
-        );
-
-        if (options.nest) {
+    if (options) {
+      switch (options.execute) {
+        case "update":
+          let items = Object.keys(options.item) || {};
           result.res.forEach((f) =>
-            f[options.child].findIndex((e) => {
-              for (const element of result.child)
-                if (e === element)
-                  f[options.child].splice(
-                    f[options.child].findIndex((e) => e === element),
-                    1
-                  );
+            data.findIndex((e) => {
+              if (e === f)
+                for (const element of items) {
+                  if (options.nest)
+                    for (const i of result.child)
+                      i[element] = options.item[element];
+                  else e[element] = options.item[element];
+                }
             })
           );
-          result.res = options.data;
           break;
-        }
 
-        result.res.forEach((f) =>
-          options.data.splice(
-            options.data.findIndex((e) => e === f),
-            1
-          )
-        );
-        break;
+        case "delete":
+          result.child.forEach((f) =>
+            nest.splice(
+              nest.findIndex((e) => e === f),
+              1
+            )
+          );
 
-      case "insert":
-        if (options.child)
-          for (const element of result.res) {
-            if (typeof element[options.child] !== "object")
-              element[options.child] = [];
-            options.item.parent = element.index;
-            options.data[element.index][options.child].push(options.item);
-            nest.push(options.item);
+          if (options.nest) {
+            result.res.forEach((f) =>
+              f[options.child].findIndex((e) => {
+                for (const element of result.child)
+                  if (e === element)
+                    f[options.child].splice(
+                      f[options.child].findIndex((e) => e === element),
+                      1
+                    );
+              })
+            );
+            result.res = data;
+            break;
           }
-        else options.data.push(options.item);
-        break;
 
-      case "alter":
-        if (options.nest) map(result.child);
-        else map(result.res);
-        break;
+          result.res.forEach((f) =>
+            data.splice(
+              data.findIndex((e) => e === f),
+              1
+            )
+          );
+          break;
 
-      case "group by":
-        if (options.nest) result = group(result.child);
-        else result = group(result.res);
-        break;
+        case "insert":
+          if (options.child)
+            for (const element of result.res) {
+              if (typeof element[options.child] !== "object")
+                element[options.child] = [];
+              options.item.parent = element.index;
+              data[element.index][options.child].push(options.item);
+              nest.push(options.item);
+            }
+          else data.push(options.item);
+          break;
 
-      case "sum":
-        if (options.nest) result = sum(result.child);
-        else result = sum(result.res);
-        break;
+        case "alter":
+          if (options.nest)
+            result.alter(options.action, options.columns, result.child);
+          else result.alter(options.action, options.columns, result.res);
+          break;
 
-      case "remove duplicates":
-        if (options.nest) result = removeDpl(result.child);
-        else result = removeDpl(result.res);
-        break;
+        case "group by":
+          if (options.nest)
+            result = result.group(options.columns, result.child);
+          else result = result.group(options.columns, result.res);
+          break;
 
-      case "order by":
-        if (options.nest) result = sort(result.child);
-        else result = sort(result.res);
-        break;
-    }
+        case "sum":
+          if (options.nest) result = result.sum(result.child);
+          else result = result.sum(result.res);
+          break;
 
-    if (options.execute !== "select") {
-      result.res = options.data;
-      result.child = nest;
-    }
+        case "remove duplicates":
+          if (options.nest)
+            result = result.removeDpl(options.columns || false, result.child);
+          else result = result.removeDpl(options.columns || false, result.res);
+          break;
 
-    if (
-      options.execute === "order by" ||
-      options.execute === "sum" ||
-      options.execute === "group by" ||
-      options.execute === "remove duplicates"
-    ) {
-      delete result.child;
-      delete result.res;
-    }
-
-    if (options.template) {
-      let obj = result.res,
-        som = [],
-        html = "",
-        els = {};
-      if (!result.res) obj = result;
-      if (options.nest) obj = result.child;
-
-      if (options.execute === "sum") {
-        som.push(obj);
-        obj = som;
+        case "order by":
+          if (options.nest)
+            result = result.sort(options.columns || false, result.child);
+          else result = result.sort(options.columns || false, result.res);
+          break;
       }
 
-      if (options.component) {
-        let sha = (shadow) => {
-          shadow.innerHTML = "";
+      if (options.execute !== "select") {
+        result.res = data;
+        result.child = nest;
+      }
 
-          for (const item of obj) {
-            let element = document.createElement("s-bind");
-            element.innerHTML = options.template(item);
-            let attrs = element.querySelectorAll("*"),
-              obj,
-              allowd =
-                "text val addClass removeClass toggleClass show hide visible opacity width height";
+      if (
+        options.execute === "order by" ||
+        options.execute === "sum" ||
+        options.execute === "group by" ||
+        options.execute === "remove duplicates"
+      ) {
+        delete result.child;
+        delete result.res;
+      }
 
-            for (let e of attrs)
-              for (let a of e.getAttributeNames()) {
-                let val = e.getAttribute(a),
-                  el = new Seule(e),
-                  capitalStr = a
-                    .replace("@", "")
-                    .replace(/^\w/, (c) => c.toUpperCase());
+      if (options.template) {
+        let obj = result.res,
+          som = [],
+          html = "",
+          els = {};
+        if (!result.res) obj = result;
+        if (options.nest) obj = result.child;
 
-                if (val.includes("{")) {
-                  val = val.split("{");
-                  obj = "{" + val[1].slice(0, -1) + "}";
-                  obj = obj.replace(/[~']/g, '"').replace(/[~`]/g, '"');
-                  if (allowd.includes(capitalStr.toLowerCase()))
-                    obj = val[1].slice(0, -1);
-                  else obj = JSON.parse(obj);
-                  if (val[0])
-                    e.addEventListener(
-                      val[0],
-                      () => {
-                        el[capitalStr](obj);
-                      },
-                      false
-                    );
-                  else el[capitalStr](obj);
-                } else el[capitalStr](val);
-              }
-
-            shadow.appendChild(element);
-
-            if (options.style.length === 1) {
-              let linkElement = document.createElement("link");
-              linkElement.setAttribute("rel", "stylesheet");
-              linkElement.setAttribute("href", options.style[0] + ".css");
-              shadow.appendChild(linkElement);
-            } else {
-              let style = document.createElement("style");
-              style.textContent = options.style;
-              shadow.appendChild(style);
-            }
-          }
-        };
-
-        class Example extends HTMLElement {
-          constructor() {
-            super();
-            const shadow = this.attachShadow({
-              mode: options.mode || "open"
-            });
-            sha(shadow);
-
-            let init = () => {
-              sha(shadow);
-            };
-
-            if (options.mode !== "closed") {
-              els = options.element;
-
-              els.Select = (selector) =>
-                new Seule(shadow.querySelectorAll(selector));
-            } else
-              els.Select = () =>
-                console.log(
-                  "mode is closed! to use find method, Switch to the open Mode!"
-                );
-
-            if (options.handler) options.handler(els, obj, init);
-          }
+        if (options.execute === "sum") {
+          som.push(obj);
+          obj = som;
         }
 
-        customElements.define(options.selector, Example);
-      } else {
-        let element = new Seule(options.selector);
-        element.Html(html);
+        if (options.component) {
+          let sha = (done, shadow, attr, handler) => {
+            done = done || obj;
+            shadow.innerHTML = "";
 
-        let sha = () => {
-          html = "";
+            for (const item of obj) {
+              let element = document.createElement("s-bind");
+              element.innerHTML = options.template(item);
+              Seule.SELECTALL(element, attr, handler);
+              shadow.appendChild(element);
 
-          for (const item of obj) html += options.template(item);
+              if (options.style.length === 1) {
+                let linkElement = document.createElement("link");
+                linkElement.setAttribute("rel", "stylesheet");
+                linkElement.setAttribute("href", options.style[0] + ".css");
+                shadow.appendChild(linkElement);
+              } else {
+                let style = document.createElement("style");
+                style.textContent = options.style;
+                shadow.appendChild(style);
+              }
+            }
+          };
 
-          element.Html(html);
-        };
+          class Example extends HTMLElement {
+            constructor() {
+              super();
+              const shadow = this.attachShadow({
+                mode: options.mode || "open"
+              });
+              sha(shadow);
 
-        if (options.handler)
-          options.handler(new Seule(options.selector), obj, sha);
+              let init = (done, attr, handler) => {
+                done = done || obj;
+                sha(done, shadow, attr, handler);
+              };
+
+              if (options.mode !== "closed") {
+                els = options.element;
+
+                els.Select = (selector) =>
+                  new Seule(shadow.querySelectorAll(selector));
+              } else
+                els.Select = () =>
+                  console.log(
+                    "mode is closed! to use find method, Switch to the open Mode!"
+                  );
+
+              if (options.handler) options.handler(els, obj, init);
+            }
+          }
+
+          customElements.define(options.selector, Example);
+        } else {
+          let element = new Seule(options.selector);
+
+          let sha = (data) => {
+            data = data || obj;
+            html = "";
+
+            for (const item of data) html += options.template(item);
+
+            element.Html(html);
+          };
+
+          sha(obj);
+          if (options.handler)
+            options.handler(new Seule(options.selector), obj, sha);
+        }
       }
     }
 
     return result;
+  }
+
+  static SELECTALL(element, attr, handler) {
+    let attrs = element.querySelectorAll("*"),
+      i = 0,
+      elements = {},
+      action = {},
+      obj,
+      extra =
+        "text val show hide visible opacity width height attr style classes anime css",
+      allowd = "text val show hide visible opacity width height",
+      special = "Attr Style Classes";
+
+    for (let e of attrs) {
+      elements = {};
+
+      let el = new Seule(e),
+        ex = (da, str) => {
+          if (!extra.includes(str.toLowerCase())) {
+            if (attr && handler) {
+              handler(da, el);
+            }
+          } else {
+            if (special.includes(str)) {
+              let keys = Object.keys(da);
+              el[str](keys[0], da[keys[0]]);
+            } else el[str](da);
+          }
+        };
+
+      if (e.getAttributeNames().includes("@find")) {
+        el = element.querySelectorAll(e.getAttribute("@find"));
+        el = new Seule(el);
+      }
+
+      for (let a of e.getAttributeNames()) {
+        if (a.includes("@")) {
+          let val = e.getAttribute(a),
+            capitalStr = a
+              .replace("@", "")
+              .replace(/\w/, (c) => c.toUpperCase());
+
+          if (val.includes("{")) {
+            val = val.split("{");
+            obj = "{" + val[1].slice(0, -1) + "}";
+            obj = obj.replace(/[~']/g, '"').replace(/[~`]/g, '"');
+            if (allowd.includes(capitalStr.toLowerCase()))
+              obj = val[1].slice(0, -1);
+            else obj = JSON.parse(obj);
+
+            if (val[0]) {
+              action[i] = ["; " + capitalStr + "$" + JSON.stringify(obj)];
+              elements[val[0]] += action[i];
+              i++;
+            } else if (a !== "@find") ex(obj, capitalStr);
+          } else if (capitalStr !== "Find") ex(val, capitalStr);
+        }
+      }
+
+      let keys = Object.keys(elements);
+
+      for (let key of keys) {
+        let actions = elements[key].replace("undefined;", "").split(";");
+        e.addEventListener(key, function () {
+          for (let act of actions) {
+            let a = act.split("$");
+            if (a[0].trimStart() !== "Find")
+              ex(JSON.parse(a[1]), a[0].trimStart());
+          }
+        });
+      }
+    }
   }
 }
