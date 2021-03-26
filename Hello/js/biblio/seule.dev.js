@@ -12,9 +12,10 @@ class Seule {
     if (this.tags.length) this.tags = this.element[0];
     this.selector = selector;
     this.root = root;
-    if (typeof root === "object") this.parrent = root;
     this.children = false;
-    let child = this.children;
+    this.firstChild = false;
+    let child = this.children,
+      firstChild = this.firstChild;
 
     this.render = function () {
       let el = this.tags;
@@ -41,6 +42,7 @@ class Seule {
           el.innerHTML = "";
           shadow.appendChild(cl);
           child = new Seule(shadow.children);
+          firstChild = child.element[1];
         }
       }
 
@@ -58,13 +60,15 @@ class Seule {
         "color: red; font-size:38px;"
       );
     }
+
+    this.firstChild = firstChild;
   }
 
   Find(selector) {
     if (this.root) {
-      this.tags = this.children.element[1].querySelectorAll(selector);
+      this.tags = this.firstChild.querySelectorAll(selector);
       this.el = selector;
-      return new Seule(this.tags, this.children.element[1]);
+      return new Seule(this.tags, this.firstChild);
     }
 
     if (typeof selector === "object") return new Seule(selector);
@@ -119,7 +123,7 @@ class Seule {
   }
 
   Hold(handler, time) {
-    time = time || "1s";
+    time = time || "1.5s";
     return this.Each(function () {
       let mouseIsDown = false,
         isTouch =
@@ -132,7 +136,7 @@ class Seule {
         mouseIsDown = true;
         setTimeout(function () {
           if (mouseIsDown) {
-            handler(new Seule(e));
+            handler(new Seule(e), e);
           }
         }, parseFloat(time.replace(/s/g, "")) * 1000);
       });
@@ -234,17 +238,23 @@ class Seule {
   }
 
   Copy(target, options) {
-    let tar;
+    let tar,
+      ons = options.split(":");
     if (this.root) tar = this.root.querySelector(target);
     else tar = this.tags.closest("body").querySelector(target);
-    return this.On(options.on, function () {
-      let eventFired = new MouseEvent(options.event, {
-        view: window,
-        bubbles: true,
-        cancelable: true
+
+    for (let on of ons) {
+      this.On(on.trimStart().trimEnd(), function () {
+        let eventFired = new MouseEvent(on.trimStart().trimEnd(), {
+          view: window,
+          bubbles: true,
+          cancelable: true
+        });
+        tar.dispatchEvent(eventFired);
       });
-      tar.dispatchEvent(eventFired);
-    });
+    }
+
+    return this;
   }
 
   Toggle(event, options) {
@@ -310,10 +320,9 @@ class Seule {
   }
 
   Classes(action, className) {
-    if (action === "add") this.AddClass(className);
-    if (action === "remove") this.RemoveClass(className);
-    if (action === "toggle") this.ToggleClass(className);
-    return this;
+    return this.Each(function () {
+      this.classList[action](className);
+    });
   }
 
   ClassList() {
@@ -380,8 +389,6 @@ class Seule {
         max = {},
         ancient = {},
         origin = {};
-      let old = "",
-        nw = options.text;
 
       for (const element of keys) {
         let forbidden = "duration property direction loop time delay text";
@@ -415,8 +422,12 @@ class Seule {
         .replace(/;/g, ", ");
       newCss["transition-timing-function"] = options.type || "ease";
       if (options.property) newCss["transition-property"] = options.property;
-      if (options.duration) newCss["transition-duration"] = options.duration;
-      if (options.delay) newCss["transition-delay"] = options.delay;
+
+      if (!options.loop && !options.direction) {
+        if (options.duration) newCss["transition-duration"] = options.duration;
+        if (options.delay) newCss["transition-delay"] = options.delay;
+      }
+
       ancient.transition = newCss.transition;
       ancient["transition-timing-function"] =
         newCss["transition-timing-function"];
@@ -430,25 +441,14 @@ class Seule {
       let array = Object.values(max);
       max = Math.max(...array) * 1000;
       return this.Each(function () {
-        old = this.innerText;
-
-        if (options.text) {
-          let del = 0,
-            value = "";
-          if (options.text.delay)
-            del = parseFloat(options.text.delay.replace(/s/g, "")) * 1000;
-          if (options.text.value) value = nw = options.text.value;
-          else value = options.text;
-          setTimeout(function () {
-            this.innerText = value;
-          }, del);
-        }
-
         let element = this,
           times = 1,
           boucle,
-          delay = options.timeOut || 100,
-          interval = parseInt(max + delay) * 2 + 100;
+          delay = 100;
+        if (options.loop || options.direction)
+          if (options.delay)
+            delay = parseFloat(options.delay.replace(/s/g, "")) * 1000;
+        let interval = parseInt(max + delay) * 2 + 100;
 
         if (options.direction || options.loop) {
           action(max + delay);
@@ -459,15 +459,12 @@ class Seule {
           if (options.direction) clearInterval(boucle);
         } else {
           element.setAttribute("style", Seule.objectToStyle(newCss));
-          if (options.text) element.innerText = nw;
         }
 
         function action(delay, time) {
           element.setAttribute("style", Seule.objectToStyle(newCss));
-          if (options.text) element.innerText = nw;
           setTimeout(() => {
             element.setAttribute("style", Seule.objectToStyle(ancient));
-            if (options.text) element.innerText = old;
           }, parseInt(delay));
 
           if (time) {
@@ -640,10 +637,10 @@ class Seule {
   }
 
   HtmlMethod() {
-    let element;
-    if (this.root) element = this.children.el[1];
-    else element = this.tags;
-    Seule.GETATTR(element);
+    let fr = false,
+      element = this.tags;
+    if (this.root) element = fr = this.firstChild;
+    Seule.GETATTR(element, false, false, fr);
     return this;
   }
 
@@ -1248,7 +1245,7 @@ class Seule {
             for (const item of obj) {
               let element = document.createElement("s-bind");
               element.innerHTML = options.template(item);
-              Seule.GETATTR(element, attr, handler);
+              Seule.GETATTR(element, attr, handler, element);
               shadow.appendChild(element);
 
               if (options.style.length === 1) {
@@ -1315,37 +1312,37 @@ class Seule {
     return result;
   }
 
-  static GETATTR(element, attr, handler) {
+  static GETATTR(element, attr, handler, ifr) {
     let attrs = element.querySelectorAll("*"),
       i = 0,
       elements = {},
       action = {},
       obj,
       extra =
-        "text val show hide visible opacity width height attr style classes anime css",
+        "copy text val show hide visible opacity width height attr style classes anime css",
       allowd = "text val show hide visible opacity width height",
-      special = "Attr Style Classes";
+      special = "Copy Attr Style Classes";
 
     for (let e of attrs) {
       elements = {};
+      let el = new Seule(e, ifr);
 
-      let el = new Seule(e),
-        ex = (da, str) => {
-          if (!extra.includes(str.toLowerCase())) {
-            if (attr && handler) {
-              handler(da, el);
-            }
-          } else {
-            if (special.includes(str)) {
-              let keys = Object.keys(da);
-              el[str](keys[0], da[keys[0]]);
-            } else el[str](da);
+      let ex = (da, str) => {
+        if (!extra.includes(str.toLowerCase())) {
+          if (attr && handler) {
+            handler(da, el);
           }
-        };
+        } else {
+          if (special.includes(str)) {
+            let keys = Object.keys(da);
+            el[str](keys[0], da[keys[0]]);
+          } else el[str](da);
+        }
+      };
 
       if (e.getAttributeNames().includes("@find")) {
         el = element.querySelectorAll(e.getAttribute("@find"));
-        el = new Seule(el);
+        el = new Seule(el, ifr);
       }
 
       for (let a of e.getAttributeNames()) {
@@ -1355,12 +1352,12 @@ class Seule {
               .replace("@", "")
               .replace(/\w/, (c) => c.toUpperCase());
 
-          if (val.includes("{")) {
-            val = val.split("{");
-            obj = "{" + val[1].slice(0, -1) + "}";
+          if (val.includes("($")) {
+            val = val.split("($");
+            obj = "{" + val[1].slice(0, -2) + "}";
             obj = obj.replace(/[~']/g, '"').replace(/[~`]/g, '"');
             if (allowd.includes(capitalStr.toLowerCase()))
-              obj = val[1].slice(0, -1);
+              obj = val[1].slice(0, -2);
             else obj = JSON.parse(obj);
 
             if (val[0]) {
@@ -1375,14 +1372,19 @@ class Seule {
       let keys = Object.keys(elements);
 
       for (let key of keys) {
-        let actions = elements[key].replace("undefined;", "").split(";");
-        e.addEventListener(key, function () {
+        let actions = elements[key].replace("undefined;", "").split(";"),
+          el = new Seule(e, ifr);
+
+        handler = () => {
           for (let act of actions) {
             let a = act.split("$");
             if (a[0].trimStart() !== "Find")
               ex(JSON.parse(a[1]), a[0].trimStart());
           }
-        });
+        };
+
+        if (key === "hold") el.Hold(handler);
+        el.On(key, handler);
       }
     }
 
