@@ -1,0 +1,38 @@
+/* you may remove this Demo Style*/
+body{
+    background: #222222;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+}
+
+button{
+    background: rgba(0,0,0, 0.3);
+    border: none;
+    font-size: xx-large;
+    color: antiquewhite;
+    padding: 20px 20px;
+    border-radius: 5px;
+    outline: none;
+    transition: all 0.7s ease;
+    margin-top: 20px
+}
+
+button:hover{
+    background: antiquewhite;
+    color: #222222;
+}
+
+img{
+    width: 0;
+    display:block;
+    transition: all 0.7s ease;
+    margin: auto;
+}
+/*Demo Style*/
+
+
+/* Your Style goes here ! */
