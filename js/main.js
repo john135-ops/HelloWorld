@@ -1,12 +1,20 @@
 //Just a demonstration for Seule
-let app = new Seule('#app')
-
-app
-    .Find('button')
-    .Click((e)=> {
-    	e.Text("Welcome user X")
-    	app.Find("img").Css({width: "150px"})
+let app = new Seule({
+  el: '#app',
+  data:{
+    message: 'Click Me!'
+  },
+  handler($app, $scope){
+    $scope('button').Click(e=>{
+      e
+        .Text('Welcome user X').set()
+      $scope('img')
+        .Css('width').set('150px')
     })
+  }
+})
+
+
 
 //You may remove-it !
 
