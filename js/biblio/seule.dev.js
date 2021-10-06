@@ -108,6 +108,7 @@ class Seule {
                         const es = new el(element.el ? element.Dom(0): parent.querySelector(element));
 
                         es.Append(this)
+                        return this
                     }
 
                     Child(){
