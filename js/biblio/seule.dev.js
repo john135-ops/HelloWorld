@@ -49,11 +49,15 @@ class Seule {
                             linkElement = document.createElement("link");
                         linkElement.setAttribute("rel", "stylesheet");
 
-                        for (const link of links)
-                            if (link.getAttribute("href").includes("seule"))
-                                linkElement.setAttribute("href", link.getAttribute("href"));
-
-                        app.style && linkElement.setAttribute("href", app.style + ".css");
+                        if(app.style){
+                            if(app.style === "root"){
+                                for (const link of links)
+                                    if (link.getAttribute("href").includes(".css"))
+                                        linkElement.setAttribute("href", link.getAttribute("href"));
+                            }
+                            else linkElement.setAttribute("href", app.style);
+                        }
+                        
                         shadow.appendChild(linkElement);
                         let cl = el.cloneNode(true);
                         el.innerHTML = "";
@@ -108,7 +112,6 @@ class Seule {
                         const es = new el(element.el ? element.Dom(0): parent.querySelector(element));
 
                         es.Append(this)
-                        return this
                     }
 
                     Child(){
@@ -1205,7 +1208,7 @@ class Seule {
         frameDoc.document.write(
             '<link href="' +
             options.style +
-            '.css" rel="stylesheet" type="text/css" />'
+            '" rel="stylesheet" type="text/css" />'
         );
         frameDoc.document.write(options.template);
         frameDoc.document.write("</body></html>");
@@ -1474,7 +1477,7 @@ class Seule {
                         if (options.style.length === 1) {
                             let linkElement = document.createElement("link");
                             linkElement.setAttribute("rel", "stylesheet");
-                            linkElement.setAttribute("href", options.style[0] + ".css");
+                            linkElement.setAttribute("href", options.style[0]);
                             shadow.appendChild(linkElement);
                         } else {
                             let style = document.createElement("style");
