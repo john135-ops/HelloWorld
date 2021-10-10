@@ -1,6 +1,7 @@
 //Just a demonstration for Seule
 let app = new Seule({
   el: '#app',
+  style:'root',
   data:{
     message: 'Click Me!'
   },
