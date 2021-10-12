@@ -4,74 +4,88 @@ class Seule {
     constructor(app) {
         this.child = false;
         this.data = app.data || {};
+        this.RootElement = selectElement(app.el);
 
         let old = "",
+            firstEl = selectElement(app.el),
             init = () => this.Init(),
             Shadow = () => {
-                let el = document.querySelector(app.el),
+                let el = firstEl.el,
                     seule = {},
-                    e = app.el.replace("#", "").replace(".", ""),
+                    e = firstEl.e,
                     child = "";
 
-                Element.prototype._addEventListener = Element.prototype.addEventListener;
-                Element.prototype._removeEventListener = Element.prototype.removeEventListener;
-                Element.prototype.addEventListener = function(type,listener,useCapture=false) {
-                    this._addEventListener(type,listener,useCapture);
-                    if(!this.eventListenerList) this.eventListenerList = {};
-                    if(!this.eventListenerList[type]) this.eventListenerList[type] = [];
-                    this.eventListenerList[type].push( {type, listener, useCapture} );
-                };
-                Element.prototype.removeEventListener = function(type,listener,useCapture=false) {
-                    this._removeEventListener(type,listener,useCapture);
-                    if(!this.eventListenerList) this.eventListenerList = {};
-                    if(!this.eventListenerList[type]) this.eventListenerList[type] = [];
-                    for(let i=0; i<this.eventListenerList[type].length; i++){
-                        if( this.eventListenerList[type][i].listener===listener && this.eventListenerList[type][i].useCapture===useCapture){
-                            this.eventListenerList[type].splice(i, 1);
-                            break;
-                        }
-                    }
-                    if(this.eventListenerList[type].length===0) delete this.eventListenerList[type];
-                };
-                Element.prototype.getEventListeners = function(type){
-                    if(!this.eventListenerList) this.eventListenerList = {};
-                    if(type===undefined)  return this.eventListenerList;
-                    return this.eventListenerList[type];
-                };
+                getEventListener();
 
                 class Root extends HTMLElement {
                     constructor() {
                         super();
                         const shadow = this.attachShadow({
-                            mode: app.mode || "closed"
+                            mode: "closed"
                         });
-                        let links = document.querySelectorAll("link"),
-                            linkElement = document.createElement("link");
-                        linkElement.setAttribute("rel", "stylesheet");
+                        let links = firstEl.context.querySelectorAll("head link");
 
                         if(app.style){
                             if(app.style === "root"){
                                 for (const link of links)
-                                    if (link.getAttribute("href").includes(".css"))
-                                        linkElement.setAttribute("href", link.getAttribute("href"));
+                                    if(link.getAttribute("about"))
+                                        if (link.getAttribute("about").includes("root")) {
+                                            const l = document.createElement("link");
+                                            l.setAttribute("rel", "stylesheet");
+                                            l.setAttribute("href", link.getAttribute("href"));
+                                            shadow.appendChild(l);
+                                        }
                             }
-                            else linkElement.setAttribute("href", app.style);
+                            else {
+                                const l = document.createElement("link");
+                                l.setAttribute("rel", "stylesheet");
+                                l.setAttribute("href", app.style);
+                                shadow.appendChild(l);
+                            }
                         }
-                        
-                        shadow.appendChild(linkElement);
+
                         let cl = el.cloneNode(true);
                         el.innerHTML = "";
                         shadow.appendChild(cl);
-                        child = shadow.children[1];
-                        shadow.children[1].removeAttribute("id");
+                        child = shadow.children[shadow.children.length - 1];
+
+                        shadow.children[shadow.children.length - 1].removeAttribute("id");
                     }
                 }
 
                 customElements.define("seule-" + e, Root);
                 seule = document.createElement("seule-" + e);
+
                 el.appendChild(seule);
                 this.child = child;
                 old = child.innerHTML;
+                function getEventListener(){
+                    Element.prototype._addEventListener = Element.prototype.addEventListener;
+                    Element.prototype._removeEventListener = Element.prototype.removeEventListener;
+                    Element.prototype.addEventListener = function(type,listener,useCapture=false) {
+                        this._addEventListener(type,listener,useCapture);
+                        if(!this.eventListenerList) this.eventListenerList = {};
+                        if(!this.eventListenerList[type]) this.eventListenerList[type] = [];
+                        this.eventListenerList[type].push( {type, listener, useCapture} );
+                    };
+                    Element.prototype.removeEventListener = function(type,listener,useCapture=false) {
+                        this._removeEventListener(type,listener,useCapture);
+                        if(!this.eventListenerList) this.eventListenerList = {};
+                        if(!this.eventListenerList[type]) this.eventListenerList[type] = [];
+                        for(let i=0; i<this.eventListenerList[type].length; i++){
+                            if( this.eventListenerList[type][i].listener===listener && this.eventListenerList[type][i].useCapture===useCapture){
+                                this.eventListenerList[type].splice(i, 1);
+                                break;
+                            }
+                        }
+                        if(this.eventListenerList[type].length===0) delete this.eventListenerList[type];
+                    };
+                    Element.prototype.getEventListeners = function(type){
+                        if(!this.eventListenerList) this.eventListenerList = {};
+                        if(type===undefined)  return this.eventListenerList;
+                        return this.eventListenerList[type];
+                    };
+                }
             },
             Find = (selector, dom) => {
                 let parent = this.child;
@@ -81,11 +95,11 @@ class Seule {
                     constructor(select) {
                         if(!select) return new el(parent);
                         try {
-                            dom ? this.el = document.querySelectorAll(select) :
-                            this.el = parent.querySelectorAll(select);
+                            dom ? this.el = firstEl.context.querySelectorAll(select) :
+                                this.el = parent.querySelectorAll(select);
                         } catch (e) {
                             select.length ? this.el = select :
-                            this.el = [select];
+                                this.el = [select];
                         }
                     }
 
@@ -326,7 +340,7 @@ class Seule {
                         return this.Each(function () {
                             this.addEventListener(
                                 "keydown",
-                                    function (event) {
+                                function (event) {
                                     prevent && event.preventDefault();
 
 
@@ -770,7 +784,7 @@ class Seule {
                         if (getComputedStyle(this.el[0].parentElement).position === "fixed")
                             scrollToItemId(this.el[0].parentNode, this.el[0]);
                         else {
-                            const c = document.documentElement || document.body;
+                            const c = firstEl.context.documentElement || firstEl.context.body;
                             scrollToItemId(c, this.el[0]);
                         }
                         return this;
@@ -894,6 +908,22 @@ class Seule {
                 (s) => Find(s, true)
             );
         };
+
+        function selectElement(el, context = document) {
+            let element = {};
+
+            element.context = context;
+
+            try {
+                element.el = context.querySelector(el);
+                element.e = el.replace("#", "")
+            } catch (e) {
+                element.el = el;
+                element.e = el.getAttribute("id").replace("#", "")
+            }
+
+            return element;
+        }
     }
 
     Root() {
@@ -918,7 +948,7 @@ class Seule {
         if (options.form) {
             let newForm =
                 parent.querySelector(options.form) ||
-                document.querySelector(options.form);
+                this.RootElement.querySelector(options.form);
             formData = new FormData(newForm);
 
             newForm.onsubmit = async (e) => e.preventDefault();
@@ -1114,11 +1144,11 @@ class Seule {
         return dt;
     }
 
-    static Scroll() {
-        let sc = {};
+    static Scroll(context = document) {
+        let sc = {}
 
         sc.top = () => {
-            const c = document.documentElement.scrollTop || document.body.scrollTop;
+            const c = context.documentElement.scrollTop || context.body.scrollTop;
 
             if (c > 0) {
                 window.requestAnimationFrame(sc.top);
@@ -1129,10 +1159,10 @@ class Seule {
         };
 
         sc.bottom = () => {
-            const c = document.documentElement.scrollTop || document.body.scrollTop,
-                h = document.body.scrollHeight;
+            const c = context.documentElement.scrollTop || context.body.scrollTop,
+                h = context.body.scrollHeight;
 
-            if (window.innerHeight + window.scrollY >= document.body.offsetHeight) {
+            if (window.innerHeight + window.scrollY >= context.body.offsetHeight) {
                 window.scrollTo(0, c + h / 40);
                 return;
             }
@@ -1146,7 +1176,7 @@ class Seule {
             window.onscroll = (ev) => {
                 if (
                     window.innerHeight + window.scrollY >=
-                    document.body.offsetHeight - before
+                    context.body.offsetHeight - before
                 )
                     handler(this);
             };
@@ -1188,14 +1218,14 @@ class Seule {
         return resultMatch;
     }
 
-    static Print(options) {
+    static Print(options, context = document) {
         let title = options.title || "",
-            body = document.querySelector("body");
+            body = context.querySelector("body");
         body.insertAdjacentHTML(
             "beforeend",
             '<iframe class="seule--frame" name="sframe" style="position: fixed; bottom: -100%"></iframe>'
         );
-        let iframeEl = document.getElementsByClassName("seule--frame")[0];
+        let iframeEl = context.getElementsByClassName("seule--frame")[0];
         let frameDoc = iframeEl.contentWindow
             ? iframeEl.contentWindow
             : iframeEl.contentDocument.document
@@ -1240,7 +1270,7 @@ class Seule {
 
             let unit = options.unit || "percent",
                 distanceFromTop = options.distance,
-                winY = window.innerHeight || document.documentElement.clientHeight,
+                winY = window.innerHeight || this.RootElement.documentElement.clientHeight,
                 distTop = elem.getBoundingClientRect().top,
                 distPercent = Math.round((distTop / winY) * 100),
                 distPixels = Math.round(distTop),
